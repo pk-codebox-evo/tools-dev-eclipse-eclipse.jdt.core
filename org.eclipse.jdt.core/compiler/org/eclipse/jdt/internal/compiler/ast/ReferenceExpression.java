@@ -239,7 +239,7 @@ public class ReferenceExpression extends FunctionalExpression implements IPolyEx
 		}
 		
 		// Process the lambda, taking care not to double report diagnostics. Don't expect any from resolve, Any from code generation should surface, but not those from flow analysis.
-		implicitLambda.resolve(currentScope);
+		implicitLambda.resolveType(currentScope, true);
 		IErrorHandlingPolicy oldPolicy = currentScope.problemReporter().switchErrorHandlingPolicy(silentErrorHandlingPolicy);
 		try {
 			implicitLambda.analyseCode(currentScope, 
@@ -288,7 +288,7 @@ public class ReferenceExpression extends FunctionalExpression implements IPolyEx
 			if (this.binding != null && isMethodReference()) {
 				if (TypeBinding.notEquals(this.binding.declaringClass, this.lhs.resolvedType.erasure())) {
 					if (!this.binding.declaringClass.canBeSeenBy(currentScope)) {
-						this.binding = new MethodBinding(this.binding, (ReferenceBinding) this.lhs.resolvedType.erasure());
+						this.binding = new MethodBinding(this.binding.original(), (ReferenceBinding) this.lhs.resolvedType.erasure());
 					}
 				}
 			}
@@ -415,8 +415,8 @@ public class ReferenceExpression extends FunctionalExpression implements IPolyEx
 	public FlowInfo analyseCode(BlockScope currentScope, FlowContext flowContext, FlowInfo flowInfo) {
 		// static methods with receiver value never get here
 		if (this.haveReceiver) {
-			this.lhs.checkNPE(currentScope, flowContext, flowInfo);
 			this.lhs.analyseCode(currentScope, flowContext, flowInfo, true);
+			this.lhs.checkNPE(currentScope, flowContext, flowInfo);
 		} else if (isConstructorReference()) {
 			TypeBinding type = this.receiverType.leafComponentType();
 			if (type.isNestedType() &&

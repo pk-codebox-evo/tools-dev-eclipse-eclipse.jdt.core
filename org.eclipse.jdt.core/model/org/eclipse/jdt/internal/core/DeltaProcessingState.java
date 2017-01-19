@@ -24,13 +24,16 @@ import org.eclipse.core.resources.*;
 import org.eclipse.core.runtime.*;
 import org.eclipse.jdt.core.*;
 import org.eclipse.jdt.internal.core.JavaModelManager.PerProjectInfo;
+import org.eclipse.jdt.internal.core.nd.indexer.Indexer;
+import org.eclipse.jdt.internal.core.nd.indexer.IndexerEvent;
+import org.eclipse.jdt.internal.core.nd.java.JavaIndex;
 import org.eclipse.jdt.internal.core.util.Util;
 
 /**
  * Keep the global states used during Java element delta processing.
  */
 @SuppressWarnings({ "rawtypes", "unchecked" })
-public class DeltaProcessingState implements IResourceChangeListener {
+public class DeltaProcessingState implements IResourceChangeListener, Indexer.Listener {
 
 	/*
 	 * Collection of listeners for Java element deltas
@@ -99,7 +102,7 @@ public class DeltaProcessingState implements IResourceChangeListener {
 	private HashMap classpathValidations = new HashMap();
 
 	/* A table from JavaProject to ProjectReferenceChange */
-	private HashMap projectReferenceChanges = new HashMap();
+	private HashSet<IJavaProject> projectReferenceChanges = new HashSet<>();
 
 	/* A table from JavaProject to ExternalFolderChange */
 	private HashMap externalFolderChanges = new HashMap();
@@ -225,15 +228,11 @@ public class DeltaProcessingState implements IResourceChangeListener {
 		if (change == null) {
 			change = new ExternalFolderChange(project, oldResolvedClasspath);
 			this.externalFolderChanges.put(project, change);
-	    }
+		}
 	}
 
-	public synchronized void addProjectReferenceChange(JavaProject project, IClasspathEntry[] oldResolvedClasspath) {
-		ProjectReferenceChange change = (ProjectReferenceChange) this.projectReferenceChanges.get(project);
-		if (change == null) {
-			change = new ProjectReferenceChange(project, oldResolvedClasspath);
-			this.projectReferenceChanges.put(project, change);
-	    }
+	public synchronized void addProjectReferenceChange(IJavaProject project) {
+		this.projectReferenceChanges.add(project);
 	}
 
 	public void initializeRoots(boolean initAfterLoad) {
@@ -384,13 +383,10 @@ public class DeltaProcessingState implements IResourceChangeListener {
 	    return updates;
 	}
 
-	public synchronized ProjectReferenceChange[] removeProjectReferenceChanges() {
-	    int length = this.projectReferenceChanges.size();
-	    if (length == 0) return null;
-	    ProjectReferenceChange[]  updates = new ProjectReferenceChange[length];
-	    this.projectReferenceChanges.values().toArray(updates);
-	    this.projectReferenceChanges.clear();
-	    return updates;
+	public synchronized Set<IJavaProject> removeProjectReferenceChanges() {
+		Set<IJavaProject> result = this.projectReferenceChanges;
+		this.projectReferenceChanges = new HashSet<>();
+		return result;
 	}
 
 	public synchronized HashSet removeExternalElementsToRefresh() {
@@ -643,4 +639,14 @@ public class DeltaProcessingState implements IResourceChangeListener {
 		}
 	}
 
+	@Override
+	public void consume(IndexerEvent event) {
+		if (JavaIndex.isEnabled()) {
+			DeltaProcessor processor = getDeltaProcessor();
+			JavaElementDelta delta = (JavaElementDelta) event.getDelta();
+			delta.ignoreFromTests = true;
+			processor.notifyAndFire(delta);
+			this.deltaProcessors.set(null);
+		}
+	}
 }

@@ -35,12 +35,15 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.StringTokenizer;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import javax.annotation.processing.AbstractProcessor;
 import javax.annotation.processing.Processor;
@@ -79,6 +82,7 @@ import org.eclipse.jdt.internal.compiler.classfmt.ClassFileConstants;
 import org.eclipse.jdt.internal.compiler.classfmt.ClassFileReader;
 import org.eclipse.jdt.internal.compiler.env.INameEnvironment;
 import org.eclipse.jdt.internal.compiler.impl.CompilerOptions;
+import org.eclipse.jdt.internal.compiler.impl.IrritantSet;
 import org.eclipse.jdt.internal.compiler.lookup.ReferenceBinding;
 import org.eclipse.jdt.internal.compiler.lookup.TypeConstants;
 import org.eclipse.jdt.internal.compiler.problem.AbortCompilation;
@@ -87,8 +91,6 @@ import org.eclipse.jdt.internal.core.search.JavaSearchParticipant;
 import org.eclipse.jdt.internal.core.search.indexing.BinaryIndexer;
 import org.eclipse.jdt.internal.core.util.Messages;
 import org.osgi.framework.Bundle;
-
-import java.util.regex.Pattern;
 
 @SuppressWarnings({ "unchecked", "rawtypes" })
 public abstract class AbstractRegressionTest extends AbstractCompilerTest implements StopableTestCase {
@@ -394,7 +396,11 @@ protected static class JavacTestOptions {
 					}
 				} : null,
 			EclipseBug177715 = RUN_JAVAC ? // https://bugs.eclipse.org/bugs/show_bug.cgi?id=177715
-				new EclipseHasABug(MismatchType.JavacErrorsEclipseNone) : null,
+				new EclipseHasABug(MismatchType.JavacErrorsEclipseNone) {
+					Excuse excuseFor(JavacCompiler compiler) {
+						return compiler.compliance < ClassFileConstants.JDK1_8 ? this : null; // in 1.8 rejected by both compilers
+					}
+				} : null,
 			EclipseBug207935 = RUN_JAVAC ? // https://bugs.eclipse.org/bugs/show_bug.cgi?id=207935
 				new EclipseHasABug(MismatchType.EclipseErrorsJavacNone | MismatchType.EclipseWarningsJavacNone) : null,
 			EclipseBug216558 = RUN_JAVAC ? // https://bugs.eclipse.org/bugs/show_bug.cgi?id=216558
@@ -928,7 +934,7 @@ protected static class JavacTestOptions {
 			buffer.append("\" -1.8 " + processAnnot);
 		}
 		buffer
-			.append(" -preserveAllLocals -nowarn -g -classpath \"")
+			.append(" -preserveAllLocals -proceedOnError -nowarn -g -classpath \"")
 			.append(Util.getJavaClassLibsAsString())
 			.append(SOURCE_DIRECTORY)
 			.append("\"");
@@ -948,10 +954,11 @@ protected static class JavacTestOptions {
 		String computedProblemLog = Util.convertToIndependantLineDelimiter(requestor.problemLog.toString());
 		if (this.shouldSwallowCaptureId)
 			computedProblemLog = Pattern.compile("capture#(\\d+)").matcher(computedProblemLog).replaceAll("capture");
-		  
+
+		ProblemLog problemLog = new ProblemLog(computedProblemLog);
 		int i;
 		for (i = 0; i < alternatePlatformIndependantExpectedLogs.length; i++) {
-			if (alternatePlatformIndependantExpectedLogs[i].equals(computedProblemLog))
+			if (problemLog.sameAs(alternatePlatformIndependantExpectedLogs[i]))
 				return; // OK
 		}
 		logTestTitle();
@@ -961,6 +968,48 @@ protected static class JavacTestOptions {
 			assertEquals("Invalid problem log ", alternatePlatformIndependantExpectedLogs[i-1], computedProblemLog);
 		}
     }
+
+	/**
+	 * Used for performing order-independent log comparisons.
+	 */
+	private static final class ProblemLog {
+		final Set<String> logEntry = new HashSet<>();
+
+		public ProblemLog(String log) {
+			String[] entries = log.split("----------\n");
+			Pattern pattern = Pattern.compile("\\A(\\d*\\. )");
+
+			for (String entry : entries) {
+				Matcher matcher = pattern.matcher(entry);
+				if (matcher.find()) {
+					entry = entry.substring(matcher.end());
+				}
+				this.logEntry.add(entry);
+			}
+		}
+
+		public boolean sameAs(String toTest) {
+			ProblemLog log = new ProblemLog(toTest);
+			return equals(log);
+		}
+
+		@Override
+		public int hashCode() {
+			return this.logEntry.hashCode();
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			if (this == obj)
+				return true;
+			if (obj == null)
+				return false;
+			if (getClass() != obj.getClass())
+				return false;
+			ProblemLog other = (ProblemLog) obj;
+			return this.logEntry.equals(other.logEntry);
+		}
+	}
 
 	protected void dualPrintln(String message) {
 		System.out.println(message);
@@ -1102,6 +1151,23 @@ protected static class JavacTestOptions {
 		defaultOptions.put(CompilerOptions.OPTION_ReportUnnecessaryElse, CompilerOptions.WARNING );
 		defaultOptions.put(CompilerOptions.OPTION_ReportDeadCode, CompilerOptions.WARNING);
 		return defaultOptions;
+	}
+
+	protected void enableAllWarningsForIrritants(Map<String, String> options, IrritantSet irritants) {
+		int[] bits = irritants.getBits();
+		for (int i = 0; i < bits.length; i++) {
+			int bit = bits[i];
+			for (int b = 0; b < IrritantSet.GROUP_SHIFT; b++) {
+				int single = bit & (1 << b);
+				if (single != 0) {
+					single |= (i<<IrritantSet.GROUP_SHIFT);
+					if (single == CompilerOptions.MissingNonNullByDefaultAnnotation)
+						continue;
+					String optionKey = CompilerOptions.optionKeyFromIrritant(single);
+					options.put(optionKey, CompilerOptions.WARNING);
+				}
+			}
+		}
 	}
 
 	protected String[] getDefaultClassPaths() {

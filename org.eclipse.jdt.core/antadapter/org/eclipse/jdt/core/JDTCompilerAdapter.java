@@ -84,7 +84,7 @@ public class JDTCompilerAdapter extends DefaultCompilerAdapter {
 			}
 			return resultValue;
 		} catch (ClassNotFoundException cnfe) {
-			throw new BuildException(AntAdapterMessages.getString("ant.jdtadapter.error.cannotFindJDTCompiler")); //$NON-NLS-1$
+			throw new BuildException(AntAdapterMessages.getString("ant.jdtadapter.error.cannotFindJDTCompiler"), cnfe); //$NON-NLS-1$
 		} catch (Exception ex) {
 			throw new BuildException(ex);
 		}
@@ -305,6 +305,7 @@ public class JDTCompilerAdapter extends DefaultCompilerAdapter {
 		String source = this.attributes.getSource();
 		if (source != null) {
 			this.customDefaultOptions.put(CompilerOptions.OPTION_Source, source);
+			this.customDefaultOptions.put(CompilerOptions.OPTION_Compliance, source);
 		}
 
 		if (compilerArgs != null) {

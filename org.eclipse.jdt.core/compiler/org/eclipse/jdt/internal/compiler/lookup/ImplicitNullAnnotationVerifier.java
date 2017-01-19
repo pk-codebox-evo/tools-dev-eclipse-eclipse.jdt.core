@@ -15,6 +15,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
+import org.eclipse.jdt.core.compiler.CharOperation;
 import org.eclipse.jdt.internal.compiler.ast.ASTNode;
 import org.eclipse.jdt.internal.compiler.ast.AbstractMethodDeclaration;
 import org.eclipse.jdt.internal.compiler.ast.Argument;
@@ -190,11 +191,15 @@ public class ImplicitNullAnnotationVerifier {
 	private void collectOverriddenMethods(MethodBinding original, char[] selector, int suggestedParameterLength,
 			ReferenceBinding superType, Set ifcsSeen, List result) 
 	{
-		MethodBinding [] ifcMethods = superType.getMethods(selector, suggestedParameterLength);
+		MethodBinding [] ifcMethods = superType.unResolvedMethods();
 		int length = ifcMethods.length;
 		boolean added = false;
 		for  (int i=0; i<length; i++) {
 			MethodBinding currentMethod = ifcMethods[i];
+			if (!CharOperation.equals(selector, currentMethod.selector))
+				continue;
+			if (!currentMethod.doesParameterLengthMatch(suggestedParameterLength))
+				continue;
 			if (currentMethod.isStatic())
 				continue;
 			if (MethodVerifier.doesMethodOverride(original, currentMethod, this.environment)) {
@@ -225,6 +230,10 @@ public class ImplicitNullAnnotationVerifier {
 			boolean hasReturnNonNullDefault, boolean hasParameterNonNullDefault, boolean shouldComplain,
 			MethodBinding inheritedMethod, MethodBinding[] allInheritedMethods, Scope scope, InheritedNonNullnessInfo[] inheritedNonNullnessInfos) 
 	{
+		if(currentMethod.declaringClass.id == TypeIds.T_JavaLangObject) {
+			// all method implementations in java.lang.Object return non-null results and accept nullable as parameter.
+			return;
+		}
 		// Note that basically two different flows lead into this method:
 		// (1) during MethodVerifyer15.checkMethods() we want to report errors (against srcMethod or against the current type)
 		//     In this case this method is directly called from MethodVerifier15 (checkAgainstInheritedMethod / checkConcreteInheritedMethod)
@@ -283,7 +292,7 @@ public class ImplicitNullAnnotationVerifier {
 																	this.environment.getNonNullAnnotationName());
 						break returnType;
 					} else {
-						scope.problemReporter().cannotImplementIncompatibleNullness(currentMethod, inheritedMethod, useTypeAnnotations);
+						scope.problemReporter().cannotImplementIncompatibleNullness(scope.referenceContext(), currentMethod, inheritedMethod, useTypeAnnotations);
 						return;
 					}
 				}
@@ -299,7 +308,7 @@ public class ImplicitNullAnnotationVerifier {
 							scope.problemReporter().illegalReturnRedefinition(srcMethod, inheritedMethod,
 																	this.environment.getNonNullAnnotationName());
 						else
-							scope.problemReporter().cannotImplementIncompatibleNullness(currentMethod, inheritedMethod, useTypeAnnotations);
+							scope.problemReporter().cannotImplementIncompatibleNullness(scope.referenceContext(), currentMethod, inheritedMethod, useTypeAnnotations);
 						return;
 					}
 				}
@@ -391,7 +400,7 @@ public class ImplicitNullAnnotationVerifier {
 								inheritedMethod.declaringClass,
 								(inheritedNonNullNess == null) ? null : this.environment.getNullableAnnotationName());
 					} else {
-						scope.problemReporter().cannotImplementIncompatibleNullness(currentMethod, inheritedMethod, false);
+						scope.problemReporter().cannotImplementIncompatibleNullness(scope.referenceContext(), currentMethod, inheritedMethod, false);
 					}
 					continue;
 				} else if (currentNonNullNess == null) 
@@ -404,7 +413,7 @@ public class ImplicitNullAnnotationVerifier {
 									inheritedMethod.declaringClass,
 									annotationName);
 						} else {
-							scope.problemReporter().cannotImplementIncompatibleNullness(currentMethod, inheritedMethod, false);
+							scope.problemReporter().cannotImplementIncompatibleNullness(scope.referenceContext(), currentMethod, inheritedMethod, false);
 						}
 						continue;
 					} else if (inheritedNonNullNess == Boolean.TRUE) {
@@ -429,7 +438,7 @@ public class ImplicitNullAnnotationVerifier {
 						if (currentArgument != null)
 							scope.problemReporter().illegalParameterRedefinition(currentArgument, inheritedMethod.declaringClass, inheritedParameter);
 						else
-							scope.problemReporter().cannotImplementIncompatibleNullness(currentMethod, inheritedMethod, false);
+							scope.problemReporter().cannotImplementIncompatibleNullness(scope.referenceContext(), currentMethod, inheritedMethod, false);
 					}
 				}
 			}

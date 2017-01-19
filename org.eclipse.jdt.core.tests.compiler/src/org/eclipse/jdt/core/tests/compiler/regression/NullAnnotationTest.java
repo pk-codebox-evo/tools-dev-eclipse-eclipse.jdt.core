@@ -6939,17 +6939,17 @@ public void testTypeAnnotationProblemNotIn17() {
 			"1. ERROR in X.java (at line 3)\n" + 
 			"	public @NonNull java.lang.String test(@NonNull java.lang.String arg) {\n" + 
 			"	       ^^^^^^^^\n" + 
-			"The annotation @NonNull is disallowed for this location\n" + 
+			"Illegally placed annotation: type annotations must directly precede the simple name of the type they are meant to affect (or the [] for arrays)\n" + 
 			"----------\n" + 
 			"2. ERROR in X.java (at line 3)\n" + 
 			"	public @NonNull java.lang.String test(@NonNull java.lang.String arg) {\n" + 
 			"	                                      ^^^^^^^^\n" + 
-			"The annotation @NonNull is disallowed for this location\n" + 
+			"Illegally placed annotation: type annotations must directly precede the simple name of the type they are meant to affect (or the [] for arrays)\n" + 
 			"----------\n" + 
 			"3. ERROR in X.java (at line 4)\n" + 
 			"	@NonNull java.lang.String local = arg;\n" + 
 			"	^^^^^^^^\n" + 
-			"The annotation @NonNull is disallowed for this location\n" + 
+			"Illegally placed annotation: type annotations must directly precede the simple name of the type they are meant to affect (or the [] for arrays)\n" + 
 			"----------\n");
 }
 public void testBug420313() {
@@ -8782,7 +8782,6 @@ public void testMultipleAnnotations() {
 	options3.put(JavaCore.COMPILER_NONNULL_ANNOTATION_SECONDARY_NAMES, "org.foo1.NonNull,org.foo2.NonNull2");
 	options3.put(JavaCore.COMPILER_NULLABLE_ANNOTATION_SECONDARY_NAMES, " org.foo1.Nullable , org.foo2.Nullable2 "); // some spaces to test trimming
 	options3.put(JavaCore.COMPILER_NONNULL_BY_DEFAULT_ANNOTATION_SECONDARY_NAMES, "org.foo2.NoNulls2");
-	String specifiedOrInferred = (this.complianceLevel < ClassFileConstants.JDK1_8 ? "specified" : "inferred");
 	runNegativeTestWithLibs(
 			new String[] {
 				"p3/Test.java",
@@ -8811,7 +8810,7 @@ public void testMultipleAnnotations() {
 				"1. ERROR in p3\\Test.java (at line 8)\n" + 
 				"	return test.weaken(input);\n" + 
 				"	       ^^^^^^^^^^^^^^^^^^\n" + 
-				"Null type mismatch: required \'@NonNull String\' but the provided value is "+specifiedOrInferred+" as @Nullable\n" +
+				mismatch_NonNull_Nullable("String") +
 				"----------\n" + 
 				"2. ERROR in p3\\Test.java (at line 8)\n" + 
 				"	return test.weaken(input);\n" + 
@@ -8821,7 +8820,7 @@ public void testMultipleAnnotations() {
 				"3. ERROR in p3\\Test.java (at line 11)\n" + 
 				"	return test.weaken(input);\n" + 
 				"	       ^^^^^^^^^^^^^^^^^^\n" + 
-				"Null type mismatch: required \'@NonNull String\' but the provided value is "+specifiedOrInferred+" as @Nullable\n" +
+				mismatch_NonNull_Nullable("String") +
 				"----------\n" + 
 				"4. ERROR in p3\\Test.java (at line 11)\n" + 
 				"	return test.weaken(input);\n" + 
@@ -8894,6 +8893,144 @@ public void testBug489486negative() {
 		"	                       ^^^^^^^^^^^^^^^^^^^^^\n" + 
 		"Type mismatch: cannot convert from Class<DurationAdapter> to Class<? extends SoftReference<?>>\n" + 
 		"----------\n"
+	);
+}
+public void testBug502113() {
+	runConformTestWithLibs(
+		new String[] {
+			"test/I.java",
+			"package test;\n" +
+			"\n" +
+			"import org.eclipse.jdt.annotation.Nullable;\n" +
+			"import org.eclipse.jdt.annotation.NonNull;\n" +
+			"\n" +
+			"public interface I {\n" +
+			"	String method();\n" +
+			"\n" +
+			"	boolean equals(@Nullable Object obj);\n" +
+			"	@NonNull String toString();\n" +
+			"}\n" +
+			"",
+			"test/X.java",
+			"package test;\n" +
+			"\n" +
+			"public class X implements I {\n" +
+			"	public String method() {\n" +
+			"		return \"\";\n" +
+			"	}\n" +
+			"}\n" +
+			"",
+		}, 
+		getCompilerOptions(),
+		""
+	);
+}
+public void testBug502113b() {
+	runNegativeTestWithLibs(
+		new String[] {
+			"test/I.java",
+			"package test;\n" +
+			"\n" +
+			"import org.eclipse.jdt.annotation.Nullable;\n" +
+			"import org.eclipse.jdt.annotation.NonNull;\n" +
+			"\n" +
+			"public interface I {\n" +
+			"	String method();\n" +
+			"\n" +
+			"	boolean equals(@Nullable Object obj);\n" +
+			"	@NonNull String toString();\n" +
+			"}\n" +
+			"",
+			"test/X.java",
+			"package test;\n" +
+			"\n" +
+			"public class X implements I {\n" +
+			"	public String method() {\n" +
+			"		return \"\";\n" +
+			"	}\n" +
+			"	@Override\n" +
+			"	public boolean equals(Object other) {\n" +
+			"		return false;\n" +
+			"	}\n" +
+			"	@Override\n" +
+			"	public String toString() {\n" +
+			"		return null;\n" +
+			"	}\n" +
+			"}\n" +
+			"",
+		}, 
+		getCompilerOptions(),
+		"----------\n" + 
+		"1. ERROR in test\\X.java (at line 8)\n" + 
+		"	public boolean equals(Object other) {\n" + 
+		"	                      ^^^^^^\n" + 
+		"Missing nullable annotation: inherited method from I specifies this parameter as @Nullable\n" + 
+		"----------\n" + 
+		"2. ERROR in test\\X.java (at line 12)\n" + 
+		"	public String toString() {\n" + 
+		"	       ^^^^^^\n" + 
+		"The return type is incompatible with \'@NonNull String\' returned from I.toString() (mismatching null constraints)\n" + 
+		"----------\n"
+	);
+}
+public void testBug502214() {
+	runNegativeTestWithLibs(
+		new String[] {
+			"test/X.java",
+			"package test;\n" +
+			"\n" +
+			"import org.eclipse.jdt.annotation.NonNull;\n" +
+			"import org.eclipse.jdt.annotation.Nullable;\n" +
+			"\n" +
+			"class A {\n" +
+			"	public boolean m1(Object obj) {\n" +
+			"		return this == obj;\n" +
+			"	}\n" +
+			"	public @Nullable String m2() {\n" +
+			"		return null;\n" +
+			"	}\n" +
+			"}\n" +
+			"\n" +
+			"interface I {\n" +
+			"	public boolean m1(@Nullable Object obj);\n" +
+			"	public @NonNull String m2(); \n" +
+			"}\n" +
+			"\n" +
+			"public class X {\n" +
+			"	I f() {\n" +
+			"		class Y extends A implements I {\n" +
+			"		}\n" +
+			"		return new Y();\n" +
+			"	}\n" +
+			"}\n" +
+			"",
+		}, 
+		getCompilerOptions(),
+		(this.complianceLevel < ClassFileConstants.JDK1_8 ? 
+		"----------\n" + 
+		"1. ERROR in test\\X.java (at line 22)\n" + 
+		"	class Y extends A implements I {\n" + 
+		"	      ^\n" + 
+		"The method m2() from A cannot implement the corresponding method from I due to incompatible nullness constraints\n" + 
+		"----------\n" + 
+		"2. ERROR in test\\X.java (at line 22)\n" + 
+		"	class Y extends A implements I {\n" + 
+		"	      ^\n" + 
+		"The method m1(Object) from A cannot implement the corresponding method from I due to incompatible nullness constraints\n" + 
+		"----------\n"		
+		:
+		"----------\n" + 
+		"1. ERROR in test\\X.java (at line 22)\n" + 
+		"	class Y extends A implements I {\n" + 
+		"	      ^\n" + 
+		"The method @Nullable String m2() from A cannot implement the corresponding method from I due to incompatible nullness constraints\n" + 
+		"----------\n" + 
+		"2. ERROR in test\\X.java (at line 22)\n" + 
+		"	class Y extends A implements I {\n" + 
+		"	      ^\n" + 
+		"The method m1(Object) from A cannot implement the corresponding method from I due to incompatible nullness constraints\n" + 
+		"----------\n"
+		)
 	);
 }
 }

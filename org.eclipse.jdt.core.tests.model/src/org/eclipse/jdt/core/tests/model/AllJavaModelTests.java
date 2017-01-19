@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2015 IBM Corporation and others.
+ * Copyright (c) 2000, 2016 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -16,6 +16,7 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 
 import org.eclipse.jdt.core.tests.junit.extension.TestCase;
+import org.eclipse.jdt.core.tests.nd.RunIndexTests;
 
 import junit.framework.Test;
 import junit.framework.TestSuite;
@@ -56,6 +57,9 @@ private static Class[] getAllTestClasses() {
 
 		// Java search tests
 		RunJavaSearchTests.class,
+
+		// Testss for the new index
+		RunIndexTests.class,
 
 		// Working copy tests
 		WorkingCopyTests.class,

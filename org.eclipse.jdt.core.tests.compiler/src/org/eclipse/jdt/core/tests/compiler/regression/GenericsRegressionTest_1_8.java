@@ -23,7 +23,7 @@ import junit.framework.Test;
 public class GenericsRegressionTest_1_8 extends AbstractRegressionTest {
 
 static {
-//	TESTS_NAMES = new String[] { "testBug434483" };
+//	TESTS_NAMES = new String[] { "testBug496574_small" };
 //	TESTS_NUMBERS = new int[] { 40, 41, 43, 45, 63, 64 };
 //	TESTS_RANGE = new int[] { 11, -1 };
 }
@@ -4543,6 +4543,47 @@ public void test439594() {
 	},
 	"");
 }
+// reduced version for analysis (no need to run during normal tests)
+public void _test439594_small() {
+	this.runNegativeTest(
+		new String[] {
+			"X.java", 
+			"import java.util.ArrayList;\n" +
+			"import java.util.List;\n" +
+			"import java.util.function.Function;\n" +
+			"import java.util.function.Predicate;\n" +
+			"import java.util.stream.Collectors;\n" +
+			"import java.util.stream.Stream;\n" +
+			"public class X {\n" +
+			"	protected static interface IListEntry {\n" +
+			"		public <T> T visitRecordsWithResult(Function<Stream<Record>,T> func);		\n" +
+			"	}\n" +
+			"	protected static final class ImmutableRecord {\n" +
+			"		public ImmutableRecord(Record r) { }\n" +
+			"	}\n" +
+			"	protected static final class Record {}\n" +
+			"	public List<ImmutableRecord> compilesWithJavacButNotEclipse1() \n" +
+			"	{\n" +
+			"		return visitEntriesWithResult( stream -> {\n" +
+			"			return stream.map( entry -> {\n" +
+			"				return entry.visitRecordsWithResult( stream2 -> stream2\n" +
+			"						.filter( somePredicate() )\n" +
+			"						.map( ImmutableRecord::new )\n" +
+			"						.collect( Collectors.toList() )\n" +
+			"					);	\n" +
+			"			}).flatMap( List::stream ).collect( Collectors.toCollection( ArrayList::new ) );\n" +
+			"		});		\n" +
+			"	}		\n" +
+			"	private static Predicate<Record> somePredicate() {\n" +
+			"		return record -> true;\n" +
+			"	}		\n" +
+			"	private <T> T visitEntriesWithResult(Function<Stream<IListEntry>,T> func) {\n" +
+			"		return func.apply( new ArrayList<IListEntry>().stream() );\n" +
+			"	}\n" +
+			"}\n"
+	},
+	"");
+}
 //https://bugs.eclipse.org/bugs/show_bug.cgi?id=433852, [1.8][compiler] Javac rejects type inference results that ECJ accepts
 public void test433852() {
 	this.runNegativeTest(
@@ -6489,6 +6530,29 @@ public void testBug496574() {
 			"}\n"
 		});
 }
+public void testBug496574_small() {
+	runConformTest(
+		new String[] {
+			"Small.java",
+			"import java.util.*;\n" + 
+			"import java.util.stream.*;\n" + 
+			"\n" + 
+			"interface KeyValueObj {\n" + 
+			"    String getKey();\n" + 
+			"    String getValue();\n" + 
+			"}\n" + 
+			"\n" + 
+			"public class Small {\n" + 
+			"\n" + 
+			"	public void test(Optional<List<KeyValueObj>> optList) {\n" + 
+			"		Optional<Map<String, String>> mses = optList\n" + 
+			"                .map(ms -> ms.stream().collect(Collectors.toMap(\n" + 
+			"                    metafield -> metafield.getKey(),\n" + 
+			"                    metafield -> metafield.getValue())));\n" + 
+			"	}\n" + 
+			"}\n"
+		});
+}
 public void testBug496579() {
 	runConformTest(
 		new String[] {
@@ -6886,4 +6950,680 @@ public void testBug497239() {
 		}
 	);
 }
+public void testBug472851() {
+	runNegativeTest(
+		new String[] {
+			"Test.java",
+			"import java.util.*;\n" + 
+			"\n" + 
+			"public class Test {\n" + 
+			"    public static void main(String... arg) {\n" + 
+			"    List<Integer> l1=Arrays.asList(0, 1, 2);\n" + 
+			"    List<String>  l2=Arrays.asList(\"0\", \"1\", \"2\");\n" + 
+			"    a(Arrays.asList(l1, l2));\n" + 
+			"}\n" + 
+			"static final void a(List<? extends List<?>> type) {\n" + 
+			"    test(type);\n" + 
+			"}\n" + 
+			"static final <Y,L extends List<Y>> void test(List<L> type) {\n" + 
+			"    L l1=type.get(0), l2=type.get(1);\n" + 
+			"    l2.set(0, l1.get(0));\n" + 
+			"}\n" + 
+			"}\n"
+		},
+		"----------\n" + 
+		"1. ERROR in Test.java (at line 10)\n" + 
+		"	test(type);\n" + 
+		"	^^^^\n" + 
+		"The method test(List<L>) in the type Test is not applicable for the arguments (List<capture#1-of ? extends List<?>>)\n" + 
+		"----------\n");
+}
+public void testBug502350() {
+	runNegativeTest(
+		new String[] {
+			"makeCompilerFreeze/EclipseJava8Bug.java",
+			"package makeCompilerFreeze;\n" +
+			"\n" +
+			"interface Comparable<E> {} \n" +
+			"\n" +
+			"interface Comparator<A> {\n" +
+			"  public static <B extends Comparable<B>> Comparator<B> naturalOrder() {\n" +
+			"    return null;\n" +
+			"  }\n" +
+			"}\n" +
+			"\n" +
+			"\n" +
+			"class Stuff {\n" +
+			"  public static <T, S extends T> Object func(Comparator<T> comparator) {\n" +
+			"    return null;\n" +
+			"  }\n" +
+			"}\n" +
+			"\n" +
+			"public class EclipseJava8Bug {\n" +
+			"  static final Object BORKED =\n" +
+			"      Stuff.func(Comparator.naturalOrder());\n" +
+			"}\n" +
+			"\n" +
+			"",
+		},
+		"----------\n" + 
+		"1. ERROR in makeCompilerFreeze\\EclipseJava8Bug.java (at line 20)\n" + 
+		"	Stuff.func(Comparator.naturalOrder());\n" + 
+		"	      ^^^^\n" + 
+		"The method func(Comparator<T>) in the type Stuff is not applicable for the arguments (Comparator<Comparable<Comparable<B>>>)\n" + 
+		"----------\n" + 
+		"2. ERROR in makeCompilerFreeze\\EclipseJava8Bug.java (at line 20)\n" + 
+		"	Stuff.func(Comparator.naturalOrder());\n" + 
+		"	           ^^^^^^^^^^^^^^^^^^^^^^^^^\n" + 
+		"Type mismatch: cannot convert from Comparator<Comparable<Comparable<B>>> to Comparator<T>\n" + 
+		"----------\n"
+	);
+}
+public void testBug499351() {
+	runConformTest(
+		new String[] {
+			"Bug.java",
+			"import java.util.HashMap;\n" + 
+			"import java.util.List;\n" + 
+			"import java.util.Map;\n" + 
+			"import java.util.Set;\n" + 
+			"import java.util.stream.Collectors;\n" + 
+			"\n" + 
+			"public class Bug {\n" + 
+			"    private static final Validator VALIDATOR = new Validator();\n" + 
+			"\n" + 
+			"    public static void main(String[] args) {\n" + 
+			"        Map<String, List<Promotion>> promotions = new HashMap<>();\n" + 
+			"\n" + 
+			"        Set<ConstraintViolation> cvs = promotions.entrySet().stream()\n" + 
+			"            .flatMap(e -> e.getValue().stream()\n" + 
+			"                .flatMap(promotion -> VALIDATOR.validate(promotion).stream())\n" + 
+			"            )\n" + 
+			"            .collect(Collectors.toSet());\n" + 
+			"\n" + 
+			"        Set<ExtendedConstraintViolation> ecvs = promotions.entrySet().stream()\n" + 
+			"                .flatMap(e -> e.getValue().stream()\n" + 
+			"                    .map(constraintViolation -> new ExtendedConstraintViolation(\"\", null))\n" + 
+			"                )\n" + 
+			"                .collect(Collectors.toSet());\n" + 
+			"\n" + 
+			"        Set<ExtendedConstraintViolation> ecvs2 = promotions.entrySet().stream()\n" + 
+			"                .flatMap(e -> e.getValue().stream())\n" + 
+			"                .flatMap(promotion -> VALIDATOR.validate(promotion).stream())\n" + 
+			"                .map(constraintViolation -> new ExtendedConstraintViolation(\"promotions/2\", constraintViolation))\n" + 
+			"                .collect(Collectors.toSet());\n" + 
+			"\n" + 
+			"        // Below does not compile with 4.7M1, but worked fine in 4.5 (also compiles fine with Oracle/JDK8)\n" + 
+			"        //\n" + 
+			"        // --> Type mismatch: cannot convert from Set<Object> to Set<Bug.ExtendedConstraintViolation>\n" + 
+			"        //\n" + 
+			"        Set<ExtendedConstraintViolation> ecvs3 = promotions.entrySet().stream()\n" + 
+			"                .flatMap(e -> e.getValue().stream()\n" + 
+			"                    .flatMap(promotion -> VALIDATOR.validate(promotion).stream()\n" + 
+			"                        .map(constraintViolation -> new ExtendedConstraintViolation(\"promotions/\" + e.getKey(), constraintViolation))\n" + 
+			"                    )\n" + 
+			"                )\n" + 
+			"                .collect(Collectors.toSet());\n" + 
+			"    }\n" + 
+			"\n" + 
+			"    private static class ExtendedConstraintViolation {\n" + 
+			"        public ExtendedConstraintViolation(String key, ConstraintViolation cv) {\n" + 
+			"        }\n" + 
+			"    }\n" + 
+			"\n" + 
+			"    private static class ConstraintViolation {\n" + 
+			"    }\n" + 
+			"\n" + 
+			"    private static class Promotion {\n" + 
+			"    }\n" + 
+			"\n" + 
+			"    private static class Validator {\n" + 
+			"        public Set<ConstraintViolation> validate(Object o) {\n" + 
+			"            return null;\n" + 
+			"        }\n" + 
+			"    }\n" + 
+			"}\n"
+		});
+}
+// reduced version for analysis (no need to run during normal tests)
+public void _testBug499351_small() {
+	runConformTest(
+		new String[] {
+			"Small.java",
+			"import java.util.*;\n" + 
+			"import java.util.stream.Collectors;\n" + 
+			"\n" + 
+			"public class Small {\n" + 
+			"\n" + 
+			"    public static void test(Map<String, List<Promotion>> promotions, Validator validator) {\n" + 
+			"\n" + 
+			"        Set<ExtendedConstraintViolation> ecvs = promotions.entrySet().stream()\n" + 
+			"                .flatMap(e -> e.getValue().stream()\n" + 
+			"                    .flatMap(promotion -> validator.validate(promotion).stream()\n" + 
+			"                        .map(constraintViolation -> new ExtendedConstraintViolation(\"promotions/\" + e.getKey(), constraintViolation))\n" + 
+			"                    )\n" + 
+			"                )\n" + 
+			"                .collect(Collectors.toSet());\n" + 
+			"    }\n" + 
+			"\n" + 
+			"}\n" + 
+			"class ExtendedConstraintViolation {\n" + 
+			"    public ExtendedConstraintViolation(String key, ConstraintViolation cv) { }\n" + 
+			"}\n" + 
+			"\n" + 
+			"class ConstraintViolation { }\n" + 
+			"class Promotion { }\n" + 
+			"class Validator {\n" + 
+			"    public Set<ConstraintViolation> validate(Object o) { return null; }\n" + 
+			"}\n"
+		});
+}
+public void test499351_extra1() {
+	runConformTest(
+		new String[] {
+			"Example.java",
+			"import java.util.function.Function;\n" + 
+			"\n" + 
+			"public class Example {\n" + 
+			"   static <T> T id(T t) { return t; }\n" + 
+			"   static <T,X> T f1 (X x) { return null; }\n" + 
+			"   \n" + 
+			"   String test() {\n" + 
+			"	   return f3(y -> y.f2(Example::f1, id(y)));\n" +
+			"   }\n" + 
+			"   <U,V> V f2(Function<U, V> f, U u) {return f.apply(null);}\n" + 
+			"   <R> R f3(Function<Example,R> f) { return null; }\n" + 
+			"}\n"
+		});
+}
+public void test499351_extra2() {
+	runConformTest(
+		new String[] {
+			"BadInferenceMars451.java",
+			"import java.util.*;\n" + 
+			"import java.util.function.Function;\n" + 
+			"import java.util.stream.Collectors;\n" + 
+			"public class BadInferenceMars451 {\n" + 
+			"	public static Map<Object, List<X>> BadInferenceMars451Casus1() {\n" + 
+			"		List<X> stuff = new ArrayList<>();\n" + 
+			"		return stuff.stream().collect(Collectors.toMap(Function.identity(), t -> Arrays.asList(t), BadInferenceMars451::sum));\n" + 
+			"	}\n" + 
+			"	public static <T> List<T> sum(List<T> l1, List<T> l2) {\n" + 
+			"		return null;\n" + 
+			"	}\n" + 
+			"	public static class X {\n" + 
+			"	}\n" + 
+			"}"
+		});
+}
+public void testBug501949() {
+	runConformTest(
+		new String[] {
+			"DefaultClientRequestsV2.java",
+			"import java.io.IOException;\n" + 
+			"import java.util.List;\n" + 
+			"import java.util.function.Function;\n" + 
+			"import java.util.function.Supplier;\n" + 
+			"\n" + 
+			"\n" + 
+			"interface Flux<T> extends Publisher<T> {\n" + 
+			"	<R> Flux<R> flatMap(Function<? super T, ? extends Publisher<? extends R>> f);\n" + 
+			"	<V> Flux<V> map(Function<T,V> mapper);\n" + 
+			"	Mono<List<T>> collectList();\n" + 
+			"}\n" + 
+			"abstract class Mono<T> implements Publisher<T> {\n" + 
+			"	abstract T block();\n" + 
+			"	abstract <R> Flux<R> flatMap(Function<? super T, ? extends Publisher<? extends R>> f);\n" + 
+			"}\n" + 
+			"interface Publisher<T> {}\n" + 
+			"interface CloudFoundryOperations {\n" + 
+			"	Flux<SpaceSummary> list();\n" + 
+			"}\n" + 
+			"class SpaceSummary { }\n" + 
+			"class OrganizationSummary {\n" + 
+			"	String getId() { return \"\"; }\n" + 
+			"}\n" + 
+			"interface CFSpace {}\n" + 
+			"public class DefaultClientRequestsV2 {\n" + 
+			"\n" + 
+			"	private Flux<OrganizationSummary> _orglist;\n" + 
+			"\n" + 
+			"	private Mono<CloudFoundryOperations> operationsFor(OrganizationSummary org) {\n" + 
+			"		return null;\n" + 
+			"	}\n" + 
+			"\n" + 
+			"	public List<CFSpace> getSpaces() {\n" + 
+			"		return get(\n" + 
+			"			_orglist\n" + 
+			"			.flatMap((OrganizationSummary org) -> {\n" + 
+			"				return operationsFor(org).flatMap((operations) ->\n" + 
+			"					operations\n" + 
+			"					.list()\n" + 
+			"					.map((space) -> wrap(org, space)\n" + 
+			"					)\n" + 
+			"				);\n" + 
+			"			})\n" + 
+			"			.collectList()\n" + 
+			"		);\n" + 
+			"	}\n" + 
+			"	public static <T> T get(Mono<T> mono)  {\n" + 
+			"		return mono.block();\n" + 
+			"	}\n" + 
+			"	public static CFSpace wrap(OrganizationSummary org, SpaceSummary space) {\n" + 
+			"		return null;\n" + 
+			"	}\n" + 
+			"}\n"
+		});
+}
+public void testBug502568() {
+	runConformTest(
+		new String[] {
+			"Test.java",
+			"import java.util.ArrayList;\n" + 
+			"import java.util.List;\n" + 
+			"import java.util.Optional;\n" + 
+			"import java.util.UUID;\n" + 
+			"import java.util.concurrent.CompletableFuture;\n" + 
+			"import java.util.function.Function;\n" + 
+			"\n" + 
+			"public class Test {\n" + 
+			"	public static void main(String[] args) {\n" + 
+			"	}\n" + 
+			"	\n" + 
+			"	public CompletableFuture<UUID> test() {\n" + 
+			"		UUID id = UUID.randomUUID();\n" + 
+			"		\n" + 
+			"		return transaction(conn -> {\n" + 
+			"			return query().thenCompose(rs1 -> {\n" + 
+			"				return query().thenCompose(rs2 -> {\n" + 
+			"					return query();\n" + 
+			"				});\n" + 
+			"			});\n" + 
+			"		})\n" + 
+			"		.thenApply(rs -> id);\n" + 
+			"	}\n" + 
+			"	\n" + 
+			"	public <T> CompletableFuture<T> transaction(Function<String,CompletableFuture<T>> param1) {\n" + 
+			"		return param1.apply(\"test\");\n" + 
+			"	}\n" + 
+			"	\n" + 
+			"	public CompletableFuture<Optional<List<String>>> query() {\n" + 
+			"		return CompletableFuture.completedFuture(Optional.of(new ArrayList<String>()));\n" + 
+			"	}\n" + 
+			"}\n"
+		});
+}
+public void testBug499725() {
+	runConformTest(
+		new String[] {
+			"Try22.java",
+			"import java.rmi.RemoteException;\n" + 
+			"import java.util.Arrays;\n" + 
+			"import java.util.Collection;\n" + 
+			"import java.util.Collections;\n" + 
+			"import java.util.List;\n" + 
+			"import java.util.function.Function;\n" + 
+			"import java.util.stream.Collectors;\n" + 
+			"\n" + 
+			"\n" + 
+			"public class Try22 {\n" + 
+			"    public static class RemoteExceptionWrapper {\n" + 
+			"        @FunctionalInterface\n" + 
+			"        public static interface FunctionRemote<T, R> {\n" + 
+			"            R apply(T t) throws RemoteException;\n" + 
+			"        }\n" + 
+			"        \n" + 
+			"        public static <T, R> Function<T, R> wrapFunction(FunctionRemote<T, R> f) {\n" + 
+			"            return x -> {\n" + 
+			"                try {\n" + 
+			"                    return f.apply(x);\n" + 
+			"                }\n" + 
+			"                catch(RemoteException  e) {\n" + 
+			"                    throw new RuntimeException(e);\n" + 
+			"                }\n" + 
+			"            };\n" + 
+			"        }\n" + 
+			"    }\n" + 
+			"\n" + 
+			"\n" + 
+			"    private static class ThrowingThingy {\n" + 
+			"        public Collection<String> listStuff(String in) throws RemoteException {\n" + 
+			"            return Collections.emptyList();\n" + 
+			"        }\n" + 
+			"    }\n" + 
+			"\n" + 
+			"    \n" + 
+			"    public static void main(String[] args) {\n" + 
+			"        List<String> stagedNodes = Arrays.asList(\"a\", \"b\", \"c\");\n" + 
+			"        ThrowingThingy remoteThing = new ThrowingThingy();  // simulation of a rmi remote, hence the exceptio\n" + 
+			"        \n" + 
+			"        List<String> resultingStuff = stagedNodes.stream()\n" + 
+			"            .flatMap(RemoteExceptionWrapper.wrapFunction(\n" + 
+			"                node -> remoteThing.listStuff(node)    // HERE\n" + 
+			"                    .stream()\n" + 
+			"                    .map(sub -> node + \"/\" + sub)))\n" + 
+			"            .collect(Collectors.toList());\n" + 
+			"        \n" + 
+			"        System.out.println(resultingStuff);\n" + 
+			"    }\n" + 
+			"}\n"
+		});
+}
+public void testBug499725a() {
+	runConformTest(
+		new String[] {
+			"Try22.java",
+			"import java.rmi.RemoteException;\n" + 
+			"import java.util.Arrays;\n" + 
+			"import java.util.Collection;\n" + 
+			"import java.util.Collections;\n" + 
+			"import java.util.List;\n" + 
+			"import java.util.function.Function;\n" + 
+			"import java.util.stream.Collectors;\n" + 
+			"\n" + 
+			"\n" + 
+			"public class Try22 {\n" + 
+			"    public static class RemoteExceptionWrapper {\n" + 
+			"        @FunctionalInterface\n" + 
+			"        public static interface FunctionRemote<T, R> {\n" + 
+			"            R apply(T t) throws RemoteException;\n" + 
+			"        }\n" + 
+			"        \n" + 
+			"        public static <T, R> Function<T, R> wrapFunction(FunctionRemote<T, R> f) {\n" + 
+			"            return x -> {\n" + 
+			"                try {\n" + 
+			"                    return f.apply(x);\n" + 
+			"                }\n" + 
+			"                catch(RemoteException  e) {\n" + 
+			"                    throw new RuntimeException(e);\n" + 
+			"                }\n" + 
+			"            };\n" + 
+			"        }\n" + 
+			"    }\n" + 
+			"\n" + 
+			"\n" + 
+			"    private static class ThrowingThingy {\n" + 
+			"        public Collection<String> listStuff(String in) throws RemoteException {\n" + 
+			"            return Collections.emptyList();\n" + 
+			"        }\n" + 
+			"    }\n" + 
+			"\n" + 
+			"    \n" + 
+			"    public static void main(String[] args) {\n" + 
+			"        List<String> stagedNodes = Arrays.asList(\"a\", \"b\", \"c\");\n" + 
+			"        ThrowingThingy remoteThing = new ThrowingThingy();  // simulation of a rmi remote, hence the exceptio\n" + 
+			"        \n" + 
+			"        List<String> resultingStuff = stagedNodes.stream()\n" + 
+			"            .flatMap(RemoteExceptionWrapper.wrapFunction(\n" + 
+			"                (String node) -> remoteThing.listStuff(node)    // HERE\n" + 
+			"                    .stream()\n" + 
+			"                    .map(sub -> node + \"/\" + sub)))\n" + 
+			"            .collect(Collectors.toList());\n" + 
+			"        \n" + 
+			"        System.out.println(resultingStuff);\n" + 
+			"    }\n" + 
+			"}\n"
+		});
+}
+public void testBug508834() {
+	runConformTest(
+		new String[] {
+			"FlatMapper.java",
+			"import java.util.stream.Stream;\n" + 
+			"public class FlatMapper {\n" + 
+			"\n" + 
+			"	private String[] stuff;\n" + 
+			"	\n" + 
+			"	public static void main(String[] args) {\n" + 
+			"	    Stream.of(new FlatMapper[]{})\n" + 
+			"	        .flatMap(fl -> Stream.of(fl.stuff)) //\n" + 
+			"	        .filter(st -> !st.isEmpty()); //\n" + 
+			"	}\n" + 
+			"}\n"
+		},
+		"");
+}
+public void testBug508834_comment0() {
+	runConformTest(
+		new String[] {
+			"test/TypeB.java",
+			"package test;\n" + 
+			"public class TypeB {\n" + 
+			"    public String getText() {\n" + 
+			"        return \"\";\n" + 
+			"    }\n" + 
+			"\n" + 
+			"}\n",
+			"test/TypeA.java",
+			"package test;\n" + 
+			"public class TypeA {\n" + 
+			"    public TypeB[] getArrayOfB() {\n" + 
+			"        return null;\n" + 
+			"    }\n" + 
+			"    public TypeB getB() {\n" + 
+			"        return null;\n" + 
+			"    }\n" + 
+			"}\n",
+			"test/Test1.java",
+			"package test;\n" + 
+			"import java.util.stream.Stream;\n" + 
+			"public class Test1 {\n" + 
+			"    private TypeA[] arrayOfType() {\n" + 
+			"        return null;\n" + 
+			"    }\n" + 
+			"    private String[] test1() {\n" + 
+			"        return Stream\n" + 
+			"                .of(arrayOfType())\n" + 
+			"                .filter(a -> a.getB() != null)\n" + 
+			"                .flatMap(a -> Stream.of(a.getB()))\n" + 
+			"                .map(TypeB::getText)\n" + 
+			"                .sorted()\n" + 
+			"                .toArray(String[]::new);\n" + 
+			"    }\n" + 
+			"    private String[] test2() {\n" + 
+			"        return Stream\n" + 
+			"                .of(arrayOfType())\n" + 
+			"                .filter(a -> a.getArrayOfB() != null)\n" + 
+			"                .flatMap(a -> Stream.of(a.getArrayOfB()))\n" + 
+			"                .map(TypeB::getText)\n" + 
+			"                .sorted()\n" + 
+			"                .toArray(String[]::new);\n" + 
+			"    }\n" + 
+			"}\n"
+		},
+		"");
+	}
+	public void testBug509694() {
+		runConformTest(
+			new String[] {
+				"NfaUtil.java",
+				"/*******************************************************************************\n" + 
+				" * Copyright (c) 2011 itemis AG (http://www.itemis.eu) and others.\n" + 
+				" * All rights reserved. This program and the accompanying materials\n" + 
+				" * are made available under the terms of the Eclipse Public License v1.0\n" + 
+				" * which accompanies this distribution, and is available at\n" + 
+				" * http://www.eclipse.org/legal/epl-v10.html\n" + 
+				" *******************************************************************************/\n" + 
+				"import java.util.*;\n" + 
+				"\n" + 
+				"class Lists {\n" + 
+				"	public static <E> LinkedList<E> newLinkedList() {\n" + 
+				"		return new LinkedList<E>();\n" + 
+				"	}\n" + 
+				"\n" + 
+				"	public static <E> LinkedList<E> newLinkedList(Iterable<? extends E> elements) {\n" + 
+				"		return newLinkedList();\n" + 
+				"	}\n" + 
+				"}\n" + 
+				"\n" + 
+				"class Maps {\n" + 
+				"	public static <K, V> HashMap<K, V> newHashMap() {\n" + 
+				"		return new HashMap<K, V>();\n" + 
+				"	}\n" + 
+				"\n" + 
+				"	public static <K, V> LinkedHashMap<K, V> newLinkedHashMap() {\n" + 
+				"		return new LinkedHashMap<K, V>();\n" + 
+				"	}\n" + 
+				"\n" + 
+				"	public static <K, V> LinkedHashMap<K, V> newLinkedHashMap(Map<? extends K, ? extends V> map) {\n" + 
+				"		return new LinkedHashMap<K, V>(map);\n" + 
+				"	}\n" + 
+				"}\n" + 
+				"\n" + 
+				"class Sets {\n" + 
+				"	public static <E> HashSet<E> newHashSet(Iterable<? extends E> elements) {\n" + 
+				"		return new HashSet<E>();\n" + 
+				"	}\n" + 
+				"\n" + 
+				"	public static <E> HashSet<E> newHashSet(E... elements) {\n" + 
+				"		HashSet<E> set = new HashSet<>();\n" + 
+				"		Collections.addAll(set, elements);\n" + 
+				"		return set;\n" + 
+				"	}\n" + 
+				"}\n" + 
+				"\n" + 
+				"interface IAcceptor<T> {\n" + 
+				"	void accept(T t);\n" + 
+				"}\n" + 
+				"\n" + 
+				"interface Nfa<STATE> extends DirectedGraph<STATE> {\n" + 
+				"	STATE getStop();\n" + 
+				"	STATE getStart();\n" + 
+				"}\n" + 
+				"interface DirectedGraph<NODE> {\n" + 
+				"	Iterable<NODE> getFollowers(NODE state);\n" + 
+				"}\n" + 
+				"\n" + 
+				"/**\n" + 
+				" * @author Moritz Eysholdt - Initial contribution and API\n" + 
+				" */\n" + 
+				"public class NfaUtil {\n" + 
+				"\n" + 
+				"	public <S> Map<S, Set<S>> findCycles(Nfa<S> nfa) {\n" + 
+				"		Map<S, Set<S>> cycles = Maps.newLinkedHashMap();\n" + 
+				"		findCycles(nfa, nfa.getStart(), (List<S> t) -> {\n" + 
+				"			Set<S> cycle = Sets.newHashSet(t);\n" + 
+				"			for (S cycleNode : t) {\n" + 
+				"				// We have two cycles that are connected via at least\n" + 
+				"				// one node. Treat them as one cycle.\n" + 
+				"				Set<S> existingCycle = cycles.get(cycleNode);\n" + 
+				"				if (existingCycle != null) {\n" + 
+				"					cycle.addAll(existingCycle);\n" + 
+				"				}\n" + 
+				"			}\n" + 
+				"			for (S n : cycle) {\n" + 
+				"				cycles.put(n, cycle);\n" + 
+				"			}\n" + 
+				"		}, Maps.newHashMap(), Lists.newLinkedList());\n" + 
+				"		return cycles;\n" + 
+				"	}\n" + 
+				"\n" + 
+				"	public <S> void findCycles(Nfa<S> nfa, IAcceptor<List<S>> cycleAcceptor) {\n" + 
+				"		findCycles(nfa, nfa.getStart(), cycleAcceptor, Maps.newHashMap(), Lists.newLinkedList());\n" + 
+				"	}\n" + 
+				"\n" + 
+				"	private static final int DFS_VISITED = 1;\n" + 
+				"	private static final int DFS_ON_STACK = 2;\n" + 
+				"\n" + 
+				"	protected <S> void findCycles(Nfa<S> nfa, S node, IAcceptor<List<S>> cycleAcceptor, Map<S, Integer> dfsMark,\n" + 
+				"			LinkedList<S> dfsStack) {\n" + 
+				"		dfsStack.push(node);\n" + 
+				"		dfsMark.put(node, DFS_ON_STACK);\n" + 
+				"		for (S follower : nfa.getFollowers(node)) {\n" + 
+				"			Integer followerMark = dfsMark.get(follower);\n" + 
+				"			if (followerMark == null) {\n" + 
+				"				findCycles(nfa, follower, cycleAcceptor, dfsMark, dfsStack);\n" + 
+				"			} else if (followerMark == DFS_ON_STACK) {\n" + 
+				"				LinkedList<S> cycle = Lists.newLinkedList();\n" + 
+				"				Iterator<S> stackIter = dfsStack.iterator();\n" + 
+				"				S cycleNode;\n" + 
+				"				do {\n" + 
+				"					cycleNode = stackIter.next();\n" + 
+				"					cycle.addFirst(cycleNode);\n" + 
+				"				} while (cycleNode != follower && stackIter.hasNext());\n" + 
+				"				cycleAcceptor.accept(cycle);\n" + 
+				"			}\n" + 
+				"		}\n" + 
+				"		dfsStack.pop();\n" + 
+				"		dfsMark.put(node, DFS_VISITED);\n" + 
+				"	}\n" + 
+				"}\n"
+			});
+	}
+	public void testBug479802() {
+		runConformTest(
+			new String[] {
+				"CompilerBugUncheckedCast.java",
+				"public class CompilerBugUncheckedCast {\n" + 
+				"    public static void main(String[] args) {\n" + 
+				"        Create(true);\n" + 
+				"        Create(false);\n" + 
+				"    }\n" + 
+				"    public interface Base {\n" + 
+				"        default String def() { return \"Base\"; }\n" + 
+				"    }\n" + 
+				"    public interface Intermediate extends Base {\n" + 
+				"        @Override default String def() { return \"Intermediate\"; }\n" + 
+				"    }\n" + 
+				"    public interface Derived extends Intermediate { }\n" + 
+				"    public static class MyObject implements Base { }\n" + 
+				"    public static final class OldObject extends MyObject implements Derived { }\n" + 
+				"    public static final class NewObject extends MyObject implements Derived { }\n" + 
+				"    public static <OBJECT extends MyObject & Derived> void Make(OBJECT o) { }\n" + 
+				"    public static MyObject Create(boolean old) {\n" + 
+				"        MyObject f;\n" + 
+				"        if (old) {\n" + 
+				"            f = new OldObject();\n" + 
+				"        } else {\n" + 
+				"            f = new NewObject();\n" + 
+				"        }\n" + 
+				"        Make(uncheckedCast(f));\n" + 
+				"        System.out.println(old);\n" + 
+				"        return f;\n" + 
+				"    }\n" + 
+				"    @SuppressWarnings(\"unchecked\")\n" + 
+				"    private static <T extends MyObject & Derived> T uncheckedCast(MyObject f) {\n" + 
+				"        return (T) f;\n" + 
+				"    }\n" + 
+				"}"
+			},
+			"true\n" +
+			"false");
+	}
+	public void testBug510004_a() {
+		runConformTest(
+			new String[] {
+				"BrokenTypeInference.java",
+				"import java.util.Optional;\n" + 
+				"import java.util.stream.Stream;\n" + 
+				"\n" + 
+				"public class BrokenTypeInference {\n" + 
+				"    public static void main(String[] args) {\n" + 
+				"        Optional.of(\"42,43\").map(s -> Stream.of(s.split(\",\")));\n" + 
+				"    }\n" + 
+				"}\n"
+			});
+	}
+	public void testBug510004_b() {
+		runConformTest(
+			new String[] {
+				"BrokenTypeInference.java",
+				"import java.util.List;\n" + 
+				"import java.util.Optional;\n" + 
+				"\n" + 
+				"public class BrokenTypeInference {\n" + 
+				"    public static void main(String[] args) {\n" + 
+				"        Optional.of(\"42,43\").map(s -> x(s.split(\",\")));\n" + 
+				"    }\n" + 
+				"\n" + 
+				"    private static <X> List<X> x(X ... xs) {\n" + 
+				"        return java.util.Collections.emptyList();\n" + 
+				"    }\n" + 
+				"\n" + 
+				"    private static <X> List<X> x(X x) {\n" + 
+				"        return java.util.Collections.emptyList();\n" + 
+				"    }\n" + 
+				"}\n"
+			});
+	}
 }

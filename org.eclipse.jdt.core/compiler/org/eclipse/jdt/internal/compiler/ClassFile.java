@@ -90,6 +90,7 @@ import org.eclipse.jdt.internal.compiler.lookup.LocalTypeBinding;
 import org.eclipse.jdt.internal.compiler.lookup.LocalVariableBinding;
 import org.eclipse.jdt.internal.compiler.lookup.LookupEnvironment;
 import org.eclipse.jdt.internal.compiler.lookup.MethodBinding;
+import org.eclipse.jdt.internal.compiler.lookup.PolymorphicMethodBinding;
 import org.eclipse.jdt.internal.compiler.lookup.ReferenceBinding;
 import org.eclipse.jdt.internal.compiler.lookup.SourceTypeBinding;
 import org.eclipse.jdt.internal.compiler.lookup.SyntheticArgumentBinding;
@@ -3051,7 +3052,7 @@ public class ClassFile implements TypeConstants, TypeIds {
 				this.contents[localContentsOffset++] = (byte) (functionalDescriptorIndex >> 8);
 				this.contents[localContentsOffset++] = (byte) functionalDescriptorIndex;
 	
-				int methodHandleIndex = this.constantPool.literalIndexForMethodHandle(functional.binding.original()); // Speak of " implementation" (erased) version here, adaptations described below.
+				int methodHandleIndex = this.constantPool.literalIndexForMethodHandle(functional.binding instanceof PolymorphicMethodBinding ? functional.binding : functional.binding.original()); // Speak of " implementation" (erased) version here, adaptations described below.
 				this.contents[localContentsOffset++] = (byte) (methodHandleIndex >> 8);
 				this.contents[localContentsOffset++] = (byte) methodHandleIndex;
 	
@@ -3649,8 +3650,6 @@ public class ClassFile implements TypeConstants, TypeIds {
 		}
 
 		int annotationAttributeOffset = this.contentsOffset;
-		int constantPOffset = this.constantPool.currentOffset;
-		int constantPoolIndex = this.constantPool.currentIndex;
 		if (invisibleAnnotationsCounter != 0) {
 			if (this.contentsOffset + 10 >= this.contents.length) {
 				resizeContents(10);
@@ -3695,14 +3694,10 @@ public class ClassFile implements TypeConstants, TypeIds {
 				attributesNumber++;
 			} else {
 				this.contentsOffset = annotationAttributeOffset;
-				// reset the constant pool to its state before the clinit
-				this.constantPool.resetForAttributeName(AttributeNamesConstants.RuntimeInvisibleAnnotationsName, constantPoolIndex, constantPOffset);
 			}
 		}
 
 		annotationAttributeOffset = this.contentsOffset;
-		constantPOffset = this.constantPool.currentOffset;
-		constantPoolIndex = this.constantPool.currentIndex;
 		if (visibleAnnotationsCounter != 0) {
 			if (this.contentsOffset + 10 >= this.contents.length) {
 				resizeContents(10);
@@ -3747,7 +3742,6 @@ public class ClassFile implements TypeConstants, TypeIds {
 				attributesNumber++;
 			} else {
 				this.contentsOffset = annotationAttributeOffset;
-				this.constantPool.resetForAttributeName(AttributeNamesConstants.RuntimeVisibleAnnotationsName, constantPoolIndex, constantPOffset);
 			}
 		}
 		return attributesNumber;
@@ -3922,8 +3916,6 @@ public class ClassFile implements TypeConstants, TypeIds {
 		int visibleTypeAnnotationsCounter = visibleTypeAnnotationsNumber;
 		int invisibleTypeAnnotationsCounter = invisibleTypeAnnotationsNumber;
 		int annotationAttributeOffset = this.contentsOffset;
-		int constantPOffset = this.constantPool.currentOffset;
-		int constantPoolIndex = this.constantPool.currentIndex;
 		if (invisibleTypeAnnotationsCounter != 0) {
 			if (this.contentsOffset + 10 >= this.contents.length) {
 				resizeContents(10);
@@ -3963,14 +3955,10 @@ public class ClassFile implements TypeConstants, TypeIds {
 				attributesNumber++;
 			} else {
 				this.contentsOffset = annotationAttributeOffset;
-				// reset the constant pool to its state before the clinit
-				this.constantPool.resetForAttributeName(AttributeNamesConstants.RuntimeInvisibleTypeAnnotationsName, constantPoolIndex, constantPOffset);
 			}
 		}
 
 		annotationAttributeOffset = this.contentsOffset;
-		constantPOffset = this.constantPool.currentOffset;
-		constantPoolIndex = this.constantPool.currentIndex;
 		if (visibleTypeAnnotationsCounter != 0) {
 			if (this.contentsOffset + 10 >= this.contents.length) {
 				resizeContents(10);
@@ -4010,7 +3998,6 @@ public class ClassFile implements TypeConstants, TypeIds {
 				attributesNumber++;
 			} else {
 				this.contentsOffset = annotationAttributeOffset;
-				this.constantPool.resetForAttributeName(AttributeNamesConstants.RuntimeVisibleTypeAnnotationsName, constantPoolIndex, constantPOffset);
 			}
 		}
 		return attributesNumber;

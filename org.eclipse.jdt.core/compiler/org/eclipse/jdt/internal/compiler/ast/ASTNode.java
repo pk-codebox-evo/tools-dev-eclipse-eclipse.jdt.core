@@ -64,6 +64,7 @@ import org.eclipse.jdt.internal.compiler.lookup.LocalVariableBinding;
 import org.eclipse.jdt.internal.compiler.lookup.MethodBinding;
 import org.eclipse.jdt.internal.compiler.lookup.PackageBinding;
 import org.eclipse.jdt.internal.compiler.lookup.ParameterizedGenericMethodBinding;
+import org.eclipse.jdt.internal.compiler.lookup.ParameterizedMethodBinding;
 import org.eclipse.jdt.internal.compiler.lookup.ProblemMethodBinding;
 import org.eclipse.jdt.internal.compiler.lookup.ProblemReasons;
 import org.eclipse.jdt.internal.compiler.lookup.ReferenceBinding;
@@ -695,9 +696,17 @@ public abstract class ASTNode implements TypeConstants, TypeIds {
 				} else {
 					updatedArgumentType = argument.resolveType(scope);
 				}
-				if (updatedArgumentType != null && updatedArgumentType.kind() != Binding.POLY_TYPE)
+				if (updatedArgumentType != null && updatedArgumentType.kind() != Binding.POLY_TYPE) {
 					argumentTypes[i] = updatedArgumentType;
+					if (candidateMethod.isPolymorphic())
+						candidateMethod.parameters[i] = updatedArgumentType;
+				}
 			}
+		}
+		if (method instanceof ParameterizedGenericMethodBinding) {
+			InferenceContext18 ic18 = invocation.getInferenceContext((ParameterizedMethodBinding) method);
+			if (ic18 != null)
+				ic18.flushBoundOutbox(); // overload resolution is done, now perform the push of bounds from inner to outer
 		}
 	}
 

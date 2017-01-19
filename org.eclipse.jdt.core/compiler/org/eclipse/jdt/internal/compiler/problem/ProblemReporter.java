@@ -1589,6 +1589,8 @@ public int computeSeverity(int problemID){
 			return ProblemSeverities.Warning;
 		case IProblem.IllegalUseOfUnderscoreAsAnIdentifier:
 			return this.underScoreIsLambdaParameter ? ProblemSeverities.Error : ProblemSeverities.Warning;
+		case IProblem.ProblemNotAnalysed:
+			return ProblemSeverities.Info; // Not configurable
 	}
 	int irritant = getIrritant(problemID);
 	if (irritant != 0) {
@@ -5856,6 +5858,19 @@ public void nullAnnotationUnsupportedLocation(Annotation annotation) {
 			severity,
 			annotation.sourceStart, annotation.sourceEnd);
 }
+public void nullAnnotationAtQualifyingType(Annotation annotation) {
+	String[] arguments = new String[] {
+		String.valueOf(annotation.resolvedType.readableName())
+	};
+	String[] shortArguments = new String[] {
+		String.valueOf(annotation.resolvedType.shortReadableName())
+	};
+	int severity = ProblemSeverities.Error | ProblemSeverities.Fatal;
+	handle(IProblem.NullAnnotationAtQualifyingType,
+			arguments, shortArguments,
+			severity,
+			annotation.sourceStart, annotation.sourceEnd);
+}
 public void nullAnnotationUnsupportedLocation(TypeReference type) {
 	int sourceEnd = type.sourceEnd;
 	if (type instanceof ParameterizedSingleTypeReference) {
@@ -8947,6 +8962,14 @@ public void unusedWarningToken(Expression token) {
 		token.sourceStart,
 		token.sourceEnd);
 }
+public void problemNotAnalysed(Expression token, String optionKey) {
+	this.handle(
+		IProblem.ProblemNotAnalysed,
+		optionKey != null ? new String[]{optionKey} : new String[]{},
+		new String[] { token.constant.stringValue() },
+		token.sourceStart,
+		token.sourceEnd);
+}
 public void useAssertAsAnIdentifier(int sourceStart, int sourceEnd) {
 	this.handle(
 		IProblem.UseAssertAsAnIdentifier,
@@ -9327,7 +9350,11 @@ public void nullityMismatch(Expression expression, TypeBinding providedType, Typ
 			nullityMismatchSpecdNullable(expression, requiredType, annotationName);
 			return;
 		}
-		nullityMismatchPotentiallyNull(expression, requiredType, annotationName);
+			if (expression instanceof ArrayReference && expression.resolvedType.isFreeTypeVariable()) {
+				nullityMismatchingTypeAnnotation(expression, providedType, requiredType, NullAnnotationMatching.NULL_ANNOTATIONS_MISMATCH);
+				return;
+			}
+			nullityMismatchPotentiallyNull(expression, requiredType, annotationName);
 		return;
 	}
 	if (this.options.usesNullTypeAnnotations())
@@ -9623,11 +9650,11 @@ public void expressionPotentialNullReference(ASTNode location) {
 		location.sourceEnd);
 }
 
-public void cannotImplementIncompatibleNullness(MethodBinding currentMethod, MethodBinding inheritedMethod, boolean showReturn) {
+public void cannotImplementIncompatibleNullness(ReferenceContext context, MethodBinding currentMethod, MethodBinding inheritedMethod, boolean showReturn) {
 	int sourceStart = 0, sourceEnd = 0;
-	if (this.referenceContext instanceof TypeDeclaration) {
-		sourceStart = ((TypeDeclaration) this.referenceContext).sourceStart;
-		sourceEnd =   ((TypeDeclaration) this.referenceContext).sourceEnd;
+	if (context instanceof TypeDeclaration) {
+		sourceStart = ((TypeDeclaration) context).sourceStart;
+		sourceEnd =   ((TypeDeclaration) context).sourceEnd;
 	}
 	String[] problemArguments = {
 			showReturn 
@@ -10376,6 +10403,10 @@ public void disallowedTargetForContainerAnnotation(Annotation annotation, TypeBi
 		annotation.sourceStart,
 		annotation.sourceEnd);
 }
+public void typeAnnotationAtQualifiedName(Annotation annotation) {
+		this.handle(IProblem.TypeAnnotationAtQualifiedName, NoArgument, NoArgument, annotation.sourceStart,
+				annotation.sourceEnd);
+	}
 public void genericInferenceError(String message, InvocationSite invocationSite) {
 	genericInferenceProblem(message, invocationSite, ProblemSeverities.Error);
 }

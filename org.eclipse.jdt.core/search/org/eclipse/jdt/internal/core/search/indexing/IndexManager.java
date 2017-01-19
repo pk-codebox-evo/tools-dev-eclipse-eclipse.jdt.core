@@ -10,27 +10,49 @@
  *******************************************************************************/
 package org.eclipse.jdt.internal.core.search.indexing;
 
-import java.io.*;
+import java.io.BufferedWriter;
+import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
 import java.net.URL;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Locale;
+import java.util.Map;
 import java.util.zip.CRC32;
 
-import org.eclipse.core.resources.*;
+import org.eclipse.core.resources.IContainer;
+import org.eclipse.core.resources.IFile;
+import org.eclipse.core.resources.IFolder;
+import org.eclipse.core.resources.IProject;
 import org.eclipse.core.runtime.IPath;
 import org.eclipse.core.runtime.IProgressMonitor;
 import org.eclipse.core.runtime.OperationCanceledException;
 import org.eclipse.core.runtime.Path;
-import org.eclipse.jdt.core.*;
+import org.eclipse.core.runtime.SubMonitor;
+import org.eclipse.jdt.core.IClasspathEntry;
+import org.eclipse.jdt.core.IJavaProject;
+import org.eclipse.jdt.core.JavaCore;
+import org.eclipse.jdt.core.JavaModelException;
 import org.eclipse.jdt.core.compiler.CharOperation;
-import org.eclipse.jdt.core.search.*;
+import org.eclipse.jdt.core.search.IJavaSearchScope;
+import org.eclipse.jdt.core.search.SearchDocument;
+import org.eclipse.jdt.core.search.SearchEngine;
+import org.eclipse.jdt.core.search.SearchParticipant;
 import org.eclipse.jdt.internal.compiler.ISourceElementRequestor;
 import org.eclipse.jdt.internal.compiler.SourceElementParser;
 import org.eclipse.jdt.internal.compiler.impl.CompilerOptions;
 import org.eclipse.jdt.internal.compiler.problem.DefaultProblemFactory;
 import org.eclipse.jdt.internal.compiler.util.SimpleLookupTable;
 import org.eclipse.jdt.internal.compiler.util.SimpleSet;
-import org.eclipse.jdt.internal.core.*;
-import org.eclipse.jdt.internal.core.index.*;
+import org.eclipse.jdt.internal.core.ClasspathEntry;
+import org.eclipse.jdt.internal.core.JavaModel;
+import org.eclipse.jdt.internal.core.JavaModelManager;
+import org.eclipse.jdt.internal.core.JavaProject;
+import org.eclipse.jdt.internal.core.index.DiskIndex;
+import org.eclipse.jdt.internal.core.index.FileIndexLocation;
+import org.eclipse.jdt.internal.core.index.Index;
+import org.eclipse.jdt.internal.core.index.IndexLocation;
+import org.eclipse.jdt.internal.core.nd.indexer.Indexer;
 import org.eclipse.jdt.internal.core.search.BasicSearchEngine;
 import org.eclipse.jdt.internal.core.search.PatternSearchJob;
 import org.eclipse.jdt.internal.core.search.processing.IJob;
@@ -77,6 +99,8 @@ public class IndexManager extends JobManager implements IIndexConstants {
 
 
 public synchronized void aboutToUpdateIndex(IPath containerPath, Integer newIndexState) {
+	// TODO(sxenos): Find a more appropriate and more specific place to trigger re-indexing
+	Indexer.getInstance().rescanAll();
 	// newIndexState is either UPDATING_STATE or REBUILDING_STATE
 	// must tag the index as inconsistent, in case we exit before the update job is started
 	IndexLocation indexLocation = computeIndexLocation(containerPath);
@@ -141,7 +165,7 @@ public void cleanUpIndexes() {
 		if (count > 0)
 			removeIndexesState(locations);
 	}
-	deleteIndexFiles(knownPaths);
+	deleteIndexFiles(knownPaths, null);
 }
 /**
  * Compute the pre-built index location for a specified URL
@@ -189,17 +213,25 @@ public synchronized IndexLocation computeIndexLocation(IPath containerPath) {
 	}
 	return indexLocation;
 }
-public void deleteIndexFiles() {
+/**
+ * Use {@link #deleteIndexFiles(IProgressMonitor)}
+ */
+public final void deleteIndexFiles() {
+	deleteIndexFiles(null);
+}
+public void deleteIndexFiles(IProgressMonitor monitor) {
 	if (DEBUG)
 		Util.verbose("Deleting index files"); //$NON-NLS-1$
 	this.savedIndexNamesFile.delete(); // forget saved indexes & delete each index file
-	deleteIndexFiles(null);
+	deleteIndexFiles(null, monitor);
 }
-private void deleteIndexFiles(SimpleSet pathsToKeep) {
+private void deleteIndexFiles(SimpleSet pathsToKeep, IProgressMonitor monitor) {
 	File[] indexesFiles = getSavedIndexesDirectory().listFiles();
 	if (indexesFiles == null) return;
 
+	SubMonitor subMonitor = SubMonitor.convert(monitor, indexesFiles.length);
 	for (int i = 0, l = indexesFiles.length; i < l; i++) {
+		subMonitor.split(1);
 		String fileName = indexesFiles[i].getAbsolutePath();
 		if (pathsToKeep != null && pathsToKeep.includes(new FileIndexLocation(indexesFiles[i]))) continue;
 		String suffix = ".index"; //$NON-NLS-1$
@@ -842,14 +874,16 @@ public void removeSourceFolderFromIndex(JavaProject javaProject, IPath sourceFol
 /**
  * Flush current state
  */
-public synchronized void reset() {
+public void reset() {
 	super.reset();
-	if (this.indexes != null) {
-		this.indexes = new SimpleLookupTable();
-		this.indexStates = null;
+	synchronized (this) {
+		if (this.indexes != null) {
+			this.indexes = new SimpleLookupTable();
+			this.indexStates = null;
+		}
+		this.indexLocations = new SimpleLookupTable();
+		this.javaPluginLocation = null;
 	}
-	this.indexLocations = new SimpleLookupTable();
-	this.javaPluginLocation = null;
 }
 /**
  * Resets the index for a given path.
